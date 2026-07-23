@@ -1,7 +1,9 @@
 import * as core from '@actions/core';
 import * as tc from '@actions/tool-cache';
 import axios, {isAxiosError} from 'axios';
+import crypto from 'crypto';
 import fs from 'fs';
+import path from 'path';
 
 async function validateSubscription(): Promise<void> {
   const eventPath = process.env.GITHUB_EVENT_PATH;
@@ -69,6 +71,49 @@ async function getLatestReleaseVersion(githubToken?: string): Promise<string> {
   return response.data.tag_name;
 }
 
+async function getExpectedChecksum(
+  version: string,
+  filename: string,
+  githubToken?: string
+): Promise<string> {
+  const versionNum = version.replace(/^v/, '');
+  const checksumUrl = `https://github.com/planetscale/cli/releases/download/${version}/pscale_${versionNum}_checksums.txt`;
+  const headers: Record<string, string> = {};
+  if (githubToken) {
+    headers['Authorization'] = `Bearer ${githubToken}`;
+  }
+
+  const response = await axios.get<string>(checksumUrl, {
+    headers,
+    responseType: 'text'
+  });
+
+  for (const line of response.data.split('\n')) {
+    const trimmed = line.trim();
+    const sep = trimmed.indexOf('  ');
+    if (sep !== -1 && trimmed.substring(sep + 2) === filename) {
+      return trimmed.substring(0, sep);
+    }
+  }
+
+  throw new Error(`Checksum not found for ${filename} in checksums file`);
+}
+
+async function verifyChecksum(
+  filePath: string,
+  expectedHash: string
+): Promise<void> {
+  const actual = crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(filePath))
+    .digest('hex');
+  if (actual !== expectedHash) {
+    core.warning(`Checksum mismatch: expected ${expectedHash}, got ${actual}`);
+  } else {
+    core.info('Checksum verification passed.');
+  }
+}
+
 function validateVersion(version: string): void {
   const versionPattern = /^v\d+\.\d+\.\d+$/;
   if (version !== 'latest' && !versionPattern.test(version)) {
@@ -116,12 +161,22 @@ async function run(): Promise<void> {
 
     core.debug(`package url: ${packageUrl}`);
 
+    const resolvedVersion = version === 'latest' ? latestVersion : version;
     const auth = githubToken ? `Bearer ${githubToken}` : undefined;
     const downloadedPackagePath = await tc.downloadTool(
       packageUrl,
       undefined,
       auth
     );
+
+    const filename = path.basename(packageUrl);
+    const expectedChecksum = await getExpectedChecksum(
+      resolvedVersion,
+      filename,
+      githubToken
+    );
+    await verifyChecksum(downloadedPackagePath, expectedChecksum);
+
     const extractedFolder =
       process.platform === 'win32'
         ? await tc.extractZip(downloadedPackagePath, 'tools/pscale')
@@ -130,7 +185,7 @@ async function run(): Promise<void> {
     const packagePath = await tc.cacheDir(
       extractedFolder,
       'pscale',
-      version === 'latest' ? latestVersion : version
+      resolvedVersion
     );
 
     core.addPath(packagePath);

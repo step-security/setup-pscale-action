@@ -55,7 +55,9 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const core = __importStar(__nccwpck_require__(2186));
 const tc = __importStar(__nccwpck_require__(7784));
 const axios_1 = __importStar(__nccwpck_require__(8757));
+const crypto_1 = __importDefault(__nccwpck_require__(6113));
 const fs_1 = __importDefault(__nccwpck_require__(7147));
+const path_1 = __importDefault(__nccwpck_require__(1017));
 function validateSubscription() {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
@@ -108,6 +110,42 @@ function getLatestReleaseVersion(githubToken) {
         return response.data.tag_name;
     });
 }
+function getExpectedChecksum(version, filename, githubToken) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const versionNum = version.replace(/^v/, '');
+        const checksumUrl = `https://github.com/planetscale/cli/releases/download/${version}/pscale_${versionNum}_checksums.txt`;
+        const headers = {};
+        if (githubToken) {
+            headers['Authorization'] = `Bearer ${githubToken}`;
+        }
+        const response = yield axios_1.default.get(checksumUrl, {
+            headers,
+            responseType: 'text'
+        });
+        for (const line of response.data.split('\n')) {
+            const trimmed = line.trim();
+            const sep = trimmed.indexOf('  ');
+            if (sep !== -1 && trimmed.substring(sep + 2) === filename) {
+                return trimmed.substring(0, sep);
+            }
+        }
+        throw new Error(`Checksum not found for ${filename} in checksums file`);
+    });
+}
+function verifyChecksum(filePath, expectedHash) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const actual = crypto_1.default
+            .createHash('sha256')
+            .update(fs_1.default.readFileSync(filePath))
+            .digest('hex');
+        if (actual !== expectedHash) {
+            core.warning(`Checksum mismatch: expected ${expectedHash}, got ${actual}`);
+        }
+        else {
+            core.info('Checksum verification passed.');
+        }
+    });
+}
 function validateVersion(version) {
     const versionPattern = /^v\d+\.\d+\.\d+$/;
     if (version !== 'latest' && !versionPattern.test(version)) {
@@ -150,12 +188,16 @@ function run() {
                     .replace(/{{ARCH}}/g, arch);
             }
             core.debug(`package url: ${packageUrl}`);
+            const resolvedVersion = version === 'latest' ? latestVersion : version;
             const auth = githubToken ? `Bearer ${githubToken}` : undefined;
             const downloadedPackagePath = yield tc.downloadTool(packageUrl, undefined, auth);
+            const filename = path_1.default.basename(packageUrl);
+            const expectedChecksum = yield getExpectedChecksum(resolvedVersion, filename, githubToken);
+            yield verifyChecksum(downloadedPackagePath, expectedChecksum);
             const extractedFolder = process.platform === 'win32'
                 ? yield tc.extractZip(downloadedPackagePath, 'tools/pscale')
                 : yield tc.extractTar(downloadedPackagePath, 'tools/pscale');
-            const packagePath = yield tc.cacheDir(extractedFolder, 'pscale', version === 'latest' ? latestVersion : version);
+            const packagePath = yield tc.cacheDir(extractedFolder, 'pscale', resolvedVersion);
             core.addPath(packagePath);
         }
         catch (error) {
