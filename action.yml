@@ -1,6 +1,6 @@
 name: 'Setup pscale'
 description: 'Installs the PlanetScale CLI'
-author: 'PlanetScale'
+author: 'step-security'
 branding:
   icon: 'database'
   color: 'gray-dark'

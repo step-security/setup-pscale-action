@@ -19,28 +19,11 @@ Be sure to [setup a service token](https://planetscale.com/docs/concepts/service
 
 **Example with version pinned:**
 
-Setting the `version` is optional. When omitted, the action will download the latest version. [See full list of releases](https://github.com/planetscale/cli/releases).
-
 ```yaml
 - name: Setup pscale
   uses: step-security/setup-pscale-action@v1
   with:
     version: v0.275.0
-```
-
-## Examples
-See our [PlanetScale + GitHub Actions doc](https://planetscale.com/docs/devops/github-actions) for ideas on how to use `pscale` in your Actions Workflows.
-
-## Development
-
-Install the dependencies  
-```bash
-$ npm install
-```
-
-Build the typescript and package it for distribution
-```bash
-$ npm run build && npm run package
 ```
 
 ## License
