@@ -18,7 +18,7 @@ on:
       script:
         description: "Command to build/bundle the action"
         required: false
-        default: "ncc build src/main.ts -o dist"
+        default: "npm run all"
   schedule:
     - cron: "0 0 * * 1"
 
@@ -29,7 +29,7 @@ jobs:
       force: ${{ inputs.force || false }}
       base_branch: ${{ inputs.base_branch || 'main' }}
       node_version: ${{ inputs.node_version || '24' }}
-      script: ${{ inputs.script || 'ncc build src/main.ts -o dist' }}
+      script: ${{ inputs.script || 'npm run all' }}
 
 permissions:
   contents: write

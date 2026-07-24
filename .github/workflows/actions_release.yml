@@ -13,7 +13,7 @@ on:
       script:
         description: "Command to build/bundle the action"
         required: false
-        default: "ncc build src/main.ts -o dist"
+        default: "npm run all"
 
 permissions:
   contents: read
@@ -29,4 +29,4 @@ jobs:
     with:
       tag: "${{ github.event.inputs.tag }}"
       node_version: ${{ inputs.node_version || '24' }}
-      script: ${{ inputs.script || 'ncc build src/main.ts -o dist' }}
+      script: ${{ inputs.script || 'npm run all' }}
